@@ -2,6 +2,8 @@
 // facesLeft — эмодзи смотрит влево (нужно для отражения при ходьбе).
 
 export const PETS = {
+    // Clawd — маскот Claude (рисуется пиксель-артом, эмодзи — только для текста)
+    clawd: {emoji: '🦀', name: 'Clawd', food: '🍪', toy: '⌨️', facesLeft: false, sprite: 'clawd'},
     cat: {emoji: '🐈', name: 'Кот', food: '🐟', toy: '🧶', facesLeft: true},
     blackcat: {emoji: '🐈‍⬛', name: 'Чёрный кот', food: '🐟', toy: '🧶', facesLeft: true},
     dog: {emoji: '🐕', name: 'Собака', food: '🦴', toy: '🎾', facesLeft: true},

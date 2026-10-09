@@ -19,7 +19,10 @@ export class PetService extends Emitter {
         this._loadState();
         this._lastWarn = 0;
         this._settings.connectObject(
-            'changed::pet-type', () => this.emit('changed'),
+            'changed::pet-type', () => {
+                this._syncName();
+                this.emit('changed');
+            },
             'changed::pet-name', () => this.emit('changed'),
             'changed::pet-enabled', () => this.emit('changed'),
             this);
@@ -28,6 +31,16 @@ export class PetService extends Emitter {
             this._tick();
             return true;
         });
+    }
+
+    /** Clawd приходит со своим именем; при смене на другого питомца возвращаем стандартное. */
+    _syncName() {
+        const id = this._settings.get_string('pet-type');
+        const name = this._settings.get_string('pet-name').trim();
+        if (id === 'clawd' && (!name || name === 'Мурзик'))
+            this._settings.set_string('pet-name', 'Clawd');
+        else if (id !== 'clawd' && name === 'Clawd')
+            this._settings.set_string('pet-name', 'Мурзик');
     }
 
     _loadState() {

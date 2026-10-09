@@ -7,6 +7,7 @@ import St from 'gi://St';
 import {Emitter, Subscriptions, Timers} from '../utils.js';
 import {formatDuration, formatSpeed} from '../pure/format.js';
 import * as W from './widgets.js';
+import {PetSprite} from './petSprite.js';
 
 // Порядок отображения виджетов внутри слота
 export const WIDGET_ORDER = ['media', 'pet', 'clock', 'date', 'weather', 'cpu', 'ram', 'temp', 'fps', 'net', 'battery', 'keyboard'];
@@ -122,7 +123,7 @@ class PetWidget extends CompactWidget {
             y_align: Clutter.ActorAlign.CENTER,
             clip_to_allocation: false,
         });
-        this._pet = new St.Label({style_class: 'di-cw-pet', y_align: Clutter.ActorAlign.CENTER});
+        this._pet = new PetSprite({size: Math.max(14, ctx.theme.compactHeight - 14)});
         this._pet.set_pivot_point(0.5, 0.5);
         this._area.add_child(this._pet);
         this.actor.add_child(this._area);
@@ -139,8 +140,8 @@ class PetWidget extends CompactWidget {
     _sync() {
         const pet = this.ctx.services.pet;
         this.actor.visible = pet.enabled;
-        this._pet.text = pet.state.sleeping ? '💤' : pet.kind.emoji;
-        this._pet.style = `font-size: ${Math.max(14, this.ctx.theme.compactHeight - 14)}px;`;
+        this._pet.setKind(pet.kind);
+        this._pet.sleeping = pet.state.sleeping;
         if (this._area.get_stage())
             this._pet.y = Math.round((this._area.height - this._pet.height) / 2);
     }
@@ -168,10 +169,14 @@ class PetWidget extends CompactWidget {
         this._pet.scale_x = (this._dir > 0) === facesLeft ? -1 : 1;
         const dist = Math.abs(target - this._pet.x);
         const duration = Math.max(300, dist * (220 - speed * 18));
+        this._pet.walking = true;
         this._pet.ease({
             x: target,
             duration,
             mode: Clutter.AnimationMode.EASE_IN_OUT_SINE,
+            onStopped: () => {
+                this._pet.walking = false;
+            },
             onComplete: () => this._timers.timeout(400 + Math.random() * 2500, () => this._walk()),
         });
         // Подпрыгивание при ходьбе
