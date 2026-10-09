@@ -64,11 +64,11 @@ else
     warn "GNOME Shell ещё не знает о новом расширении."
 fi
 
-if [ "${XDG_SESSION_TYPE:-}" = "wayland" ]; then
-    warn "Wayland: выйдите из системы и войдите снова, затем выполните:"
+if [ "${XDG_SESSION_TYPE:-}" = "x11" ]; then
+    warn "X11: нажмите Alt+F2, введите r и Enter — затем при необходимости:"
     echo "    gnome-extensions enable $UUID"
 else
-    warn "X11: нажмите Alt+F2, введите r и Enter — затем при необходимости:"
+    warn "Wayland: выйдите из системы и войдите снова, затем выполните:"
     echo "    gnome-extensions enable $UUID"
 fi
 echo

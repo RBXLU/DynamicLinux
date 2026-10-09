@@ -391,7 +391,9 @@ export default class DynamicIslandExtension extends Extension {
         this._timers.timeout(180, () => {
             try {
                 if (!this._vkbd) {
-                    const seat = Clutter.get_default_backend().get_default_seat();
+                    // В GNOME 50 глобального «бэкенда по умолчанию» нет — берём из контекста сцены
+                    const backend = global.stage.context?.get_backend?.() ?? Clutter.get_default_backend();
+                    const seat = backend.get_default_seat();
                     this._vkbd = seat.create_virtual_device(Clutter.InputDeviceType.KEYBOARD_DEVICE);
                 }
                 const now = () => GLib.get_monotonic_time();

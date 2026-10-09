@@ -638,14 +638,28 @@ export class Island extends Emitter {
         const grab = Main.pushModal(this.actor, {actionMode: Shell.ActionMode.POPUP});
         if (!grab)
             return;
-        if ((grab.get_seat_state() & Clutter.GrabState.KEYBOARD) === 0) {
+        if (!this._grabUsable(grab)) {
             Main.popModal(grab);
             return;
         }
+        // Если система отняла захват (например, открылось меню), сворачиваемся
+        grab.connectObject('notify::revoked', () => {
+            if (this._grab === grab && grab.revoked)
+                this.collapse();
+        }, this);
         this._grab = grab;
         this._collapseTimer = this._timers.clear(this._collapseTimer);
         this.expanded.setPinned(true);
         this.emit('pinned', true);
+    }
+
+    /** Получили ли мы действительно клавиатуру (API захвата отличается в GNOME 50). */
+    _grabUsable(grab) {
+        if (typeof grab.get_seat_state === 'function')
+            return (grab.get_seat_state() & Clutter.GrabState.KEYBOARD) !== 0;
+        if (typeof grab.is_revoked === 'function')
+            return !grab.is_revoked();
+        return true;
     }
 
     _unpin() {
@@ -653,6 +667,7 @@ export class Island extends Emitter {
             return;
         const grab = this._grab;
         this._grab = null;
+        safe(() => grab.disconnectObject(this), 'grab disconnect');
         safe(() => Main.popModal(grab), 'popModal');
         this.expanded.setPinned(false);
         this.emit('pinned', false);

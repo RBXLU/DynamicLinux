@@ -11,8 +11,9 @@
   <img src="docs/screenshots/tab-home.jpg" alt="Раскрытый остров" width="760">
 </p>
 
-> Поддерживаются **GNOME Shell 45–49** (Ubuntu 24.04+, Fedora 39+, Arch и т. д.), Wayland и X11.
-> Проверено вживую в GNOME Shell 46.
+> Поддерживаются **GNOME Shell 45–50** (Ubuntu 24.04+, Fedora 39+, Arch и т. д.).
+> В GNOME 50 остался только Wayland (сеанс X11 удалён), расширение работает и там, и на X11 в более старых версиях.
+> Проверено вживую в GNOME Shell 46; для GNOME 50.5 все используемые API сверены с исходниками оболочки и Mutter 50.5.
 
 ---
 
@@ -75,8 +76,8 @@ cd DynamicLinux
 
 После установки **перезапустите GNOME Shell**:
 
-* **Wayland** (по умолчанию в Ubuntu/Fedora) — выйдите из системы и войдите снова;
-* **X11** — `Alt+F2`, введите `r`, `Enter`.
+* **Wayland** (единственный вариант в GNOME 50, по умолчанию в Ubuntu/Fedora) — выйдите из системы и войдите снова;
+* **X11** (только GNOME 45–49) — `Alt+F2`, введите `r`, `Enter`.
 
 Затем, если остров не появился: `gnome-extensions enable dynamic-island@dynamiclinux`.
 
