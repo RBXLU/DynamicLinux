@@ -3,11 +3,14 @@
 import Clutter from 'gi://Clutter';
 import GObject from 'gi://GObject';
 import Gio from 'gi://Gio';
+import GLib from 'gi://GLib';
 import Pango from 'gi://Pango';
 import St from 'gi://St';
 import Cairo from 'cairo';
 
 import {parseColor} from '../pure/format.js';
+
+const VISUALIZER_STEP_MS = 110;
 
 const HAS_ORIENTATION = !!St.BoxLayout.find_property('orientation');
 
@@ -518,6 +521,7 @@ class DIVisualizer extends St.BoxLayout {
         }
         this.connect('destroy', () => {
             this._destroyed = true;
+            this._sync();
         });
     }
 
@@ -530,43 +534,39 @@ class DIVisualizer extends St.BoxLayout {
         if (p === this._playing)
             return;
         this._playing = p;
-        if (p && this._animate) {
-            this._bars.forEach((b, i) => this._bounce(b, i));
-        } else {
-            for (const b of this._bars) {
-                b.remove_all_transitions();
-                b.ease({scale_y: 0.25, duration: 300, mode: Clutter.AnimationMode.EASE_OUT_QUAD});
-            }
-        }
+        this._sync();
     }
 
-    _bounce(bar, i) {
-        if (!this._playing || this._destroyed || !this.mapped || !St.Settings.get().enable_animations)
-            return;
-        const target = 0.25 + Math.random() * 0.75;
-        bar.ease({
-            scale_y: target,
-            duration: 180 + Math.random() * 220 + i * 15,
-            mode: Clutter.AnimationMode.EASE_IN_OUT_SINE,
-            onComplete: () => {
-                if (this._playing && !this._destroyed)
-                    this._bounce(bar, i);
-            },
-        });
+    // Столбики меняются скачками ~9 раз в секунду, без плавных переходов:
+    // плавная анимация заставляла бы композитор перерисовывать кадр
+    // на каждом обновлении экрана, пока играет музыка.
+    _sync() {
+        const run = this._playing && this._animate && this.mapped && !this._destroyed &&
+            St.Settings.get().enable_animations;
+        if (run && !this._tickId) {
+            this._tickId = GLib.timeout_add(GLib.PRIORITY_DEFAULT, VISUALIZER_STEP_MS, () => {
+                for (const b of this._bars)
+                    b.scale_y = 0.25 + Math.random() * 0.75;
+                return GLib.SOURCE_CONTINUE;
+            });
+        } else if (!run && this._tickId) {
+            GLib.source_remove(this._tickId);
+            this._tickId = 0;
+        }
+        if (!run && !this._destroyed) {
+            for (const b of this._bars)
+                b.scale_y = this._playing ? 0.6 : 0.25;
+        }
     }
 
     vfunc_map() {
         super.vfunc_map();
-        if (this._playing && this._animate)
-            this._bars.forEach((b, i) => this._bounce(b, i));
+        this._sync();
     }
 
     vfunc_unmap() {
-        if (!this._destroyed) {
-            for (const b of this._bars)
-                b.remove_all_transitions();
-        }
         super.vfunc_unmap();
+        this._sync();
     }
 });
 
