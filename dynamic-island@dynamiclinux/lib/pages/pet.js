@@ -6,6 +6,7 @@ import St from 'gi://St';
 import {BasePage} from './base.js';
 import * as W from '../ui/widgets.js';
 import {PETS} from '../services/pet.js';
+import {PetSprite} from '../ui/petSprite.js';
 
 const DECOR = ['🌵', '🪴', '🌼', '🍄', '🪨', '🌷'];
 
@@ -34,7 +35,7 @@ export class PetPage extends BasePage {
             this._room.add_child(d);
             this._decor.push(d);
         }
-        this._sprite = new St.Label({style_class: 'di-pet-sprite', reactive: true, track_hover: true});
+        this._sprite = new PetSprite({size: 54, reactive: true, emojiSleep: false, style_class: 'di-pet-sprite'});
         this._sprite.set_pivot_point(0.5, 1);
         this._room.add_child(this._sprite);
         this._sprite.connect('button-press-event', () => {
@@ -82,8 +83,17 @@ export class PetPage extends BasePage {
 
         // Выбор питомца
         const kinds = Object.entries(PETS).map(([id, p]) => {
-            const b = W.button({label: p.emoji, cls: 'di-pet-kind', onClick: () => this.settings.set_string('pet-type', id)});
-            b._label.clutter_text.ellipsize = 0;
+            const b = p.sprite
+                ? W.button({cls: 'di-pet-kind', onClick: () => this._chooseKind(id)})
+                : W.button({label: p.emoji, cls: 'di-pet-kind', onClick: () => this._chooseKind(id)});
+            if (p.sprite) {
+                const icon = new PetSprite({size: 20});
+                icon.setKind(p);
+                icon.x_align = Clutter.ActorAlign.CENTER;
+                b.set_child(icon);
+            } else {
+                b._label.clutter_text.ellipsize = 0;
+            }
             b.accessible_name = p.name;
             b._kind = id;
             return b;
@@ -98,6 +108,10 @@ export class PetPage extends BasePage {
         this.subs.on(pet, 'level-up', lvl => this._burst(['⭐', '🎉', '✨'], `Уровень ${lvl}!`));
         this._x = 80;
         this._sync();
+    }
+
+    _chooseKind(id) {
+        this.settings.set_string('pet-type', id);
     }
 
     _layoutRoom() {
@@ -118,9 +132,17 @@ export class PetPage extends BasePage {
     _sync() {
         const pet = this.services.pet;
         const t = this.theme;
-        this._sprite.text = pet.kind.emoji;
+        this._sprite.setKind(pet.kind);
+        this._sprite.sleeping = pet.state.sleeping;
         this._sprite.opacity = pet.state.sleeping ? 170 : 255;
-        this._name.text = `${pet.kind.emoji} ${pet.name} · ур. ${pet.level}`;
+        this._name.text = `${pet.kind.sprite ? '' : `${pet.kind.emoji} `}${pet.name} · ур. ${pet.level}`;
+        // Обновляем поле имени, только если имя поменялось в настройках (не сбиваем ввод)
+        const savedName = this.settings.get_string('pet-name');
+        if (savedName !== this._lastName) {
+            this._lastName = savedName;
+            this._nameEntry.set_text(savedName);
+        }
+        this._layoutRoom();
         this._mood.text = `${pet.mood.emoji} ${pet.mood.text} · ${pet.ageDays} дн. вместе · погладили ${pet.state.pets} раз`;
         const set = (id, v, text) => {
             this._bars[id].b.value = v;
@@ -172,10 +194,14 @@ export class PetPage extends BasePage {
         const speed = this.settings.get_int('pet-speed');
         const dist = Math.abs(target - this._sprite.x);
         const duration = Math.max(400, dist * (140 - speed * 10));
+        this._sprite.walking = true;
         this._sprite.ease({
             x: target,
             duration,
             mode: Clutter.AnimationMode.EASE_IN_OUT_SINE,
+            onStopped: () => {
+                this._sprite.walking = false;
+            },
             onComplete: () => {
                 // Иногда прыгает на месте
                 if (Math.random() < 0.35)
