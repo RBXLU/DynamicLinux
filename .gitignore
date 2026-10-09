@@ -1,0 +1,4 @@
+# Скомпилированные схемы собираются при установке
+gschemas.compiled
+*.zip
+node_modules/
