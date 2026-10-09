@@ -76,6 +76,10 @@ class SelectionOverlay {
 
     _onEvent(event) {
         const type = event.type();
+        // События входа/выхода указателя обязаны идти дальше: иначе Clutter 50
+        // пишет в лог «runtime check failed (retval == CLUTTER_EVENT_PROPAGATE)»
+        if (type === Clutter.EventType.ENTER || type === Clutter.EventType.LEAVE)
+            return Clutter.EVENT_PROPAGATE;
         const [x, y] = event.get_coords();
         if (type === Clutter.EventType.KEY_PRESS) {
             if (event.get_key_symbol() === Clutter.KEY_Escape)

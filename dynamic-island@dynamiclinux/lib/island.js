@@ -7,7 +7,7 @@ import St from 'gi://St';
 import * as Main from 'resource:///org/gnome/shell/ui/main.js';
 
 import {Theme} from './theme.js';
-import {Emitter, Timers, safe} from './utils.js';
+import {Emitter, Timers, addChrome, safe} from './utils.js';
 import {CompactView} from './ui/compact.js';
 import {ExpandedView} from './ui/expanded.js';
 import {ActivityView} from './ui/activity.js';
@@ -39,9 +39,30 @@ export class Island extends Emitter {
         this._currentActivity = null;
         this._radius = this.theme.compactRadius;
 
-        this._build();
-        this._connect();
-        this._place(false);
+        try {
+            this._build();
+            this._connect();
+            this._place(false);
+        } catch (e) {
+            // Не оставляем на экране недостроенный остров
+            this._abort();
+            throw e;
+        }
+    }
+
+    /** Убирает всё, что успело создаться, если сборка острова не удалась. */
+    _abort() {
+        this._timers.destroy();
+        Main.layoutManager.disconnectObject(this);
+        Main.overview.disconnectObject(this);
+        for (const a of [this._strut, this.actor]) {
+            if (!a)
+                continue;
+            safe(() => Main.layoutManager.removeChrome(a), 'removeChrome');
+            safe(() => a.destroy(), 'destroy');
+        }
+        for (const v of [this.compact, this.activity, this.expanded])
+            safe(() => v?.destroy(), 'destroy view');
     }
 
     // ================================================================ построение
@@ -89,7 +110,7 @@ export class Island extends Emitter {
         this.expanded.actor.visible = false;
         this.expanded.actor.opacity = 0;
 
-        Main.layoutManager.addChrome(this.actor, {
+        addChrome(Main.layoutManager, this.actor, {
             affectsInputRegion: true,
             trackFullscreen: this.settings.get_boolean('hide-in-fullscreen'),
         });
@@ -97,7 +118,7 @@ export class Island extends Emitter {
         // Резерв места сверху (струт), чтобы развёрнутые окна не заезжали под остров
         if (this.settings.get_boolean('reserve-space')) {
             this._strut = new St.Widget({reactive: false, opacity: 0, name: 'dynamicIslandStrut'});
-            Main.layoutManager.addChrome(this._strut, {
+            addChrome(Main.layoutManager, this._strut, {
                 affectsStruts: true,
                 affectsInputRegion: false,
                 trackFullscreen: true,

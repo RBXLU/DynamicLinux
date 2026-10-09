@@ -9,7 +9,7 @@ import {Extension} from 'resource:///org/gnome/shell/extensions/extension.js';
 import * as Main from 'resource:///org/gnome/shell/ui/main.js';
 
 import {Island, State} from './lib/island.js';
-import {Emitter, Timers, disposeHttp, showInFolder} from './lib/utils.js';
+import {Emitter, Timers, disposeHttp, showInFolder, trackChrome} from './lib/utils.js';
 import {preview, plural, formatBytes} from './lib/pure/format.js';
 
 import {SysMonitor} from './lib/services/sysmon.js';
@@ -74,6 +74,16 @@ export default class DynamicIslandExtension extends Extension {
         if (this._running)
             return;
         this._running = true;
+        try {
+            this._startInner();
+        } catch (e) {
+            // Лучше остаться без острова, но со стандартной панелью, чем с недостроенным
+            logError(e, '[dynamic-island] не удалось запустить остров');
+            this._stop();
+        }
+    }
+
+    _startInner() {
         const settings = this._settings;
 
         // Секундный «тик» для часов и индикаторов
@@ -149,23 +159,25 @@ export default class DynamicIslandExtension extends Extension {
         if (!this._running)
             return;
         this._running = false;
-        Main.wm.removeKeybinding('expand-shortcut');
-        this._settings.disconnectObject(this._ctx);
-        this._activitySubs?.forEach(fn => fn());
-        this._activitySubs = null;
-        this._restorePanel();
-        this._destroyIsland();
-        for (const [name, svc] of Object.entries(this._services ?? {})) {
+        const step = (what, fn) => {
             try {
-                svc.destroy();
+                fn();
             } catch (e) {
-                logError(e, `[dynamic-island] destroy ${name}`);
+                logError(e, `[dynamic-island] остановка: ${what}`);
             }
-        }
+        };
+        step('горячая клавиша', () => Main.wm.removeKeybinding('expand-shortcut'));
+        step('настройки', () => this._ctx && this._settings.disconnectObject(this._ctx));
+        step('активности', () => this._activitySubs?.forEach(fn => fn()));
+        this._activitySubs = null;
+        step('панель', () => this._restorePanel());
+        step('остров', () => this._destroyIsland());
+        for (const [name, svc] of Object.entries(this._services ?? {}))
+            step(`сервис ${name}`, () => svc.destroy());
         this._services = null;
         if (this._tickId)
             this._tickId = this._timers.clear(this._tickId);
-        this._tick?.disconnectAll();
+        step('тик', () => this._tick?.disconnectAll());
         this._tick = null;
         this._vkbd = null;
         this._ctx = null;
@@ -230,7 +242,7 @@ export default class DynamicIslandExtension extends Extension {
         try {
             // Перестаём резервировать под панель место на экране
             lm.untrackChrome(box);
-            lm.trackChrome(box, {affectsStruts: false, affectsInputRegion: true, trackFullscreen: false});
+            trackChrome(lm, box, {affectsStruts: false, affectsInputRegion: true, trackFullscreen: false});
         } catch (e) {
             logError(e, '[dynamic-island] panel struts');
         }
@@ -283,7 +295,7 @@ export default class DynamicIslandExtension extends Extension {
             Main.panel.statusArea[name]?.menu?.disconnectObject(this);
         try {
             lm.untrackChrome(box);
-            lm.trackChrome(box, {affectsStruts: true, affectsInputRegion: true, trackFullscreen: true});
+            trackChrome(lm, box, {affectsStruts: true, affectsInputRegion: true, trackFullscreen: true});
         } catch (e) {
             logError(e, '[dynamic-island] panel restore');
         }

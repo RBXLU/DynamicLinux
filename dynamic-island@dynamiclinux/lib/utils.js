@@ -538,3 +538,67 @@ export function safe(fn, what = '') {
 export function uid() {
     return `${Date.now().toString(36)}${Math.floor(Math.random() * 1e6).toString(36)}`;
 }
+
+// ---------------------------------------------------------------- слои оболочки (chrome)
+
+// GNOME 50 убрал параметр affectsInputRegion (он нужен был только X11) и теперь
+// отвергает его ошибкой «Unrecognized parameter». Узнаём это по первой попытке.
+let _inputRegionParam = true;
+
+function withoutInputRegion(params) {
+    const rest = {...params};
+    delete rest.affectsInputRegion;
+    return rest;
+}
+
+function isParamError(e) {
+    return /Unrecognized parameter/.test(e?.message ?? '');
+}
+
+/**
+ * addChrome / addTopChrome, совместимые с GNOME 45–50.
+ *
+ * @param {object} layoutManager Main.layoutManager
+ * @param {Clutter.Actor} actor
+ * @param {object} params
+ * @param {boolean} [top] добавить поверх всех окон
+ */
+export function addChrome(layoutManager, actor, params, top = false) {
+    const add = p => (top ? layoutManager.addTopChrome(actor, p) : layoutManager.addChrome(actor, p));
+    if (!_inputRegionParam) {
+        add(withoutInputRegion(params));
+        return;
+    }
+    try {
+        add(params);
+    } catch (e) {
+        if (!isParamError(e))
+            throw e;
+        _inputRegionParam = false;
+        // addChrome успел добавить актёра в uiGroup до ошибки — убираем и повторяем
+        actor.get_parent()?.remove_child(actor);
+        add(withoutInputRegion(params));
+    }
+}
+
+/**
+ * trackChrome, совместимый с GNOME 45–50.
+ *
+ * @param {object} layoutManager Main.layoutManager
+ * @param {Clutter.Actor} actor
+ * @param {object} params
+ */
+export function trackChrome(layoutManager, actor, params) {
+    if (!_inputRegionParam) {
+        layoutManager.trackChrome(actor, withoutInputRegion(params));
+        return;
+    }
+    try {
+        layoutManager.trackChrome(actor, params);
+    } catch (e) {
+        if (!isParamError(e))
+            throw e;
+        _inputRegionParam = false;
+        layoutManager.trackChrome(actor, withoutInputRegion(params));
+    }
+}

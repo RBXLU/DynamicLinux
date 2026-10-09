@@ -35,6 +35,12 @@ class CompactWidget {
         this.ctx = ctx;
         this.subs = new Subscriptions();
         this.actor = W.hbox({style_class: 'di-cw', y_align: Clutter.ActorAlign.CENTER});
+        // Актёра могут уничтожить «снаружи» (например, при остановке оболочки) —
+        // подписки на сервисы снимаем сразу, чтобы не трогать мёртвые объекты
+        this.actor.connect('destroy', () => {
+            this._destroyed = true;
+            this.subs.clear();
+        });
     }
 
     /** Повторно применить состояние (Clutter показывает актёра при добавлении в родителя). */
@@ -275,6 +281,8 @@ class StatWidget extends CompactWidget {
     }
 
     _update() {
+        if (this._destroyed)
+            return;
         const s = this.ctx.services.sysmon;
         let text = '';
         switch (this._kind) {
