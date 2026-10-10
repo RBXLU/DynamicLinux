@@ -17,6 +17,11 @@ export class BasePage {
             x_expand: true,
             y_expand: true,
         });
+        this.actor.connect('destroy', () => {
+            this.destroyed = true;
+            this.subs.clear();
+            this.timers.destroy();
+        });
     }
 
     /** Показать короткое сообщение внутри острова. */

@@ -97,6 +97,21 @@ class DIClawdSprite extends St.DrawingArea {
         this.queue_repaint();
     }
 
+    /** Шаг ходьбы, управляемый снаружи (без собственного таймера). */
+    advance() {
+        this._stepping = true;
+        this._step = (this._step + 1) % 2;
+        this.queue_repaint();
+    }
+
+    stand() {
+        if (!this._stepping)
+            return;
+        this._stepping = false;
+        this._step = 0;
+        this.queue_repaint();
+    }
+
     vfunc_repaint() {
         const cr = this.get_context();
         const p = this._px;
@@ -112,7 +127,7 @@ class DIClawdSprite extends St.DrawingArea {
                     color = eyesClosed ? BODY : EYE;
                 } else if (c === '1' || c === '2') {
                     // При ходьбе одна пара ног «поднята»
-                    const lifted = this._walking && ((c === '1') === (this._step === 0));
+                    const lifted = (this._walking || this._stepping) && ((c === '1') === (this._step === 0));
                     color = lifted ? null : BODY;
                 }
                 if (!color)
@@ -194,6 +209,15 @@ class DIPetSprite extends St.Bin {
         this._walking = on;
         if (this._clawd)
             this._clawd.walking = on && !this._sleeping;
+    }
+
+    /** Один шаг (для пошаговой ходьбы в свёрнутом острове). */
+    step() {
+        this._clawd?.advance();
+    }
+
+    stand() {
+        this._clawd?.stand();
     }
 
     _apply() {

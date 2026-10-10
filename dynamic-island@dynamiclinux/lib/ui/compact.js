@@ -9,6 +9,8 @@ import {formatDuration, formatSpeed} from '../pure/format.js';
 import * as W from './widgets.js';
 import {PetSprite} from './petSprite.js';
 
+const PET_STEP_MS = 125;
+
 // Порядок отображения виджетов внутри слота
 export const WIDGET_ORDER = ['media', 'pet', 'clock', 'date', 'weather', 'cpu', 'ram', 'temp', 'fps', 'net', 'battery', 'keyboard'];
 
@@ -33,6 +35,12 @@ class CompactWidget {
         this.ctx = ctx;
         this.subs = new Subscriptions();
         this.actor = W.hbox({style_class: 'di-cw', y_align: Clutter.ActorAlign.CENTER});
+        // Актёра могут уничтожить «снаружи» (например, при остановке оболочки) —
+        // подписки на сервисы снимаем сразу, чтобы не трогать мёртвые объекты
+        this.actor.connect('destroy', () => {
+            this._destroyed = true;
+            this.subs.clear();
+        });
     }
 
     /** Повторно применить состояние (Clutter показывает актёра при добавлении в родителя). */
@@ -146,65 +154,50 @@ class PetWidget extends CompactWidget {
             this._pet.y = Math.round((this._area.height - this._pet.height) / 2);
     }
 
+    // Питомец ходит «шагами» ~8 раз в секунду и подолгу отдыхает: плавная
+    // анимация заставляла бы композитор перерисовывать каждый кадр экрана.
     _walk() {
         if (this._destroyed)
             return;
         const pet = this.ctx.services.pet;
-        const speed = this.ctx.settings.get_int('pet-speed');
         if (!pet.enabled || pet.state.sleeping || !this.actor.mapped || !St.Settings.get().enable_animations) {
-            this._timers.timeout(2000, () => this._walk());
+            this._timers.timeout(3000, () => this._walk());
+            return;
+        }
+        // Чаще отдыхает, чем ходит
+        if (Math.random() < 0.45) {
+            if (Math.random() < 0.3)
+                this._hop();
+            this._timers.timeout(2500 + Math.random() * 6000, () => this._walk());
             return;
         }
         const maxX = Math.max(0, this._area.width - this._pet.width);
-        // Иногда стоит на месте
-        if (Math.random() < 0.3) {
-            this._hop();
-            this._timers.timeout(1200 + Math.random() * 2000, () => this._walk());
-            return;
-        }
         const target = Math.round(Math.random() * maxX);
-        this._dir = target >= this._pet.x ? 1 : -1;
+        const dir = target >= this._pet.x ? 1 : -1;
         // Эмодзи по умолчанию смотрят влево; отражаем при ходьбе вправо
-        const facesLeft = pet.kind.facesLeft;
-        this._pet.scale_x = (this._dir > 0) === facesLeft ? -1 : 1;
-        const dist = Math.abs(target - this._pet.x);
-        const duration = Math.max(300, dist * (220 - speed * 18));
-        this._pet.walking = true;
-        this._pet.ease({
-            x: target,
-            duration,
-            mode: Clutter.AnimationMode.EASE_IN_OUT_SINE,
-            onStopped: () => {
-                this._pet.walking = false;
-            },
-            onComplete: () => this._timers.timeout(400 + Math.random() * 2500, () => this._walk()),
-        });
-        // Подпрыгивание при ходьбе
-        this._bob(duration);
-    }
-
-    _bob(total) {
-        if (!this._area.mapped)
-            return;
+        this._pet.scale_x = (dir > 0) === pet.kind.facesLeft ? -1 : 1;
+        const stepPx = 1 + Math.round(this.ctx.settings.get_int('pet-speed') / 3);
         const baseY = Math.round((this._area.height - this._pet.height) / 2);
-        const steps = Math.max(1, Math.floor(total / 240));
-        let i = 0;
-        const step = () => {
-            if (this._destroyed || i++ >= steps)
-                return;
-            this._pet.ease({
-                y: baseY - 2,
-                duration: 110,
-                mode: Clutter.AnimationMode.EASE_OUT_QUAD,
-                onComplete: () => this._pet.ease({
-                    y: baseY,
-                    duration: 110,
-                    mode: Clutter.AnimationMode.EASE_IN_QUAD,
-                    onComplete: step,
-                }),
-            });
-        };
-        step();
+        let up = false;
+        this._timers.interval(PET_STEP_MS, () => {
+            if (this._destroyed)
+                return false;
+            const dx = target - this._pet.x;
+            if (!this._area.mapped || Math.abs(dx) <= stepPx) {
+                this._pet.x = this._area.mapped ? target : this._pet.x;
+                this._pet.y = baseY;
+                this._pet.stand();
+                this._timers.timeout(1500 + Math.random() * 4500, () => this._walk());
+                return false;
+            }
+            this._pet.x += Math.sign(dx) * stepPx;
+            this._pet.step();
+            // Эмодзи слегка подпрыгивают на каждом шаге
+            up = !up;
+            if (!this._pet.isDrawn)
+                this._pet.y = baseY - (up ? 1 : 0);
+            return true;
+        });
     }
 
     _hop() {
@@ -288,6 +281,8 @@ class StatWidget extends CompactWidget {
     }
 
     _update() {
+        if (this._destroyed)
+            return;
         const s = this.ctx.services.sysmon;
         let text = '';
         switch (this._kind) {

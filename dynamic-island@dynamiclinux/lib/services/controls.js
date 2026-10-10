@@ -51,7 +51,9 @@ export class ControlsService extends Emitter {
             console.error(`[dynamic-island] mixer: ${e.message}`);
         }
 
-        // Яркость (gsd-power; в новых версиях GNOME — встроенный менеджер)
+        // Яркость: в GNOME 49+ — встроенный менеджер яркости оболочки
+        Main.brightnessManager?.connectObject('changed', () => this.emit('changed'), this);
+        // Яркость (gsd-power; в старых версиях GNOME)
         this._brightness = null;
         try {
             new BrightnessProxy(Gio.DBus.session, 'org.gnome.SettingsDaemon.Power',
@@ -245,6 +247,7 @@ export class ControlsService extends Emitter {
         this._sink?.disconnectObject(this);
         this._source?.disconnectObject(this);
         this._brightness?.disconnectObject(this);
+        Main.brightnessManager?.disconnectObject(this);
         try {
             Keyboard.getInputSourceManager().disconnectObject(this);
         } catch {}

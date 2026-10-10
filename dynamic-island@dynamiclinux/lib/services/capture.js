@@ -12,10 +12,18 @@ import * as Main from 'resource:///org/gnome/shell/ui/main.js';
 import {Emitter, Timers, cacheDir, fillTemplate, hasProgram, runShell} from '../utils.js';
 import {rgbToHex} from '../pure/format.js';
 
+// GNOME 50 убрал Meta.Cursor и global.display.set_cursor(): курсор задаётся
+// через Clutter.Actor.set_cursor_type(). В GNOME 45–49 остаётся старый способ.
 function setCursor(name) {
     try {
-        global.display.set_cursor(Meta.Cursor[name] ?? Meta.Cursor.DEFAULT);
-    } catch {}
+        if (typeof global.stage.set_cursor_type === 'function') {
+            global.stage.set_cursor_type(Clutter.CursorType[name] ?? Clutter.CursorType.DEFAULT);
+        } else {
+            global.display.set_cursor(Meta.Cursor[name] ?? Meta.Cursor.DEFAULT);
+        }
+    } catch (e) {
+        console.error(`[dynamic-island] setCursor: ${e.message}`);
+    }
 }
 
 /**
@@ -68,6 +76,10 @@ class SelectionOverlay {
 
     _onEvent(event) {
         const type = event.type();
+        // События входа/выхода указателя обязаны идти дальше: иначе Clutter 50
+        // пишет в лог «runtime check failed (retval == CLUTTER_EVENT_PROPAGATE)»
+        if (type === Clutter.EventType.ENTER || type === Clutter.EventType.LEAVE)
+            return Clutter.EVENT_PROPAGATE;
         const [x, y] = event.get_coords();
         if (type === Clutter.EventType.KEY_PRESS) {
             if (event.get_key_symbol() === Clutter.KEY_Escape)
